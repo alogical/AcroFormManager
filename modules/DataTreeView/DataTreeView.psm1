@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Display control.
+    Data field flow layout display control.
 
 .DESCRIPTION
 
@@ -43,14 +43,14 @@ function Initialize-Components {
     $View = New-ViewControl -Window $Window -Container $Parent -OnLoad $OnLoad
 
     # Menu Configuration
-    $Menu.SaveAsCsv.Component = $Parent
-    $Menu.SaveAsCsv.View      = $View
-    $Menu.Open.Component      = $Parent
-    $Menu.Open.View           = $View
-
-    [Void]$MenuStrip.Items.Add($Menu.File)
-    [Void]$MenuStrip.Items.Add($Menu.Fields)
-    [Void]$MenuStrip.Items.Add($Menu.Settings)
+    #$Menu.SaveAsCsv.Component = $Parent
+    #$Menu.SaveAsCsv.View      = $View
+    #$Menu.Open.Component      = $Parent
+    #$Menu.Open.View           = $View
+    #
+    #[Void]$MenuStrip.Items.Add($Menu.File)
+    #[Void]$MenuStrip.Items.Add($Menu.Fields)
+    #[Void]$MenuStrip.Items.Add($Menu.Settings)
 
     $Loader = [PSCustomObject]@{
         Settings = $Settings
@@ -74,6 +74,7 @@ function Initialize-Components {
 
 ###############################################################################
 # Device Data Management
+###############################################################################
 function Load-Data {
     param(
         [Parameter(Mandatory = $true)]
@@ -210,10 +211,10 @@ Export-ModuleMember -Function *
 ## explicit call to Export-ModuleMember
 ###############################################################################
 ###############################################################################
-Import-Module "$ModuleInvocationPath\..\SortedTreeView\SortedTreeView.psm1" -Prefix Tree
+$ACRS = "$env:USERPROFILE\documents\WindowsPowerShell\Programs\ACRS\"
+Import-Module "$ACRS\modules\TreeViewExtended\TreeViewExtended.psm1" -Prefix Tree
 
-$ImagePath = "$ModuleInvocationPath\..\..\resources"
-$BinPath   = "$ModuleInvocationPath\..\..\bin"
+$ImagePath = "$ACRS\resources"
 
 ### Settings Management -------------------------------------------------------
 $Settings = $null
@@ -230,75 +231,75 @@ if (Test-Path -LiteralPath $SettingsPath -PathType Leaf) {
 # Main Menu Definitions
 ### File Menu -------------------------------------------------------------
 $Menu = @{}
-$Menu.SaveAsCsv = New-Object System.Windows.Forms.ToolStripMenuItem("CSV", $null, {
-    param($sender, $e)
-
-    $Dialog = New-Object System.Windows.Forms.SaveFileDialog
-    $Dialog.ShowHelp = $false
-
-    $data = $this.Component.Data
-    foreach ($record in $data) {
-        [void]$record.PSObject.Properties.Remove('Dirty')
-    }
-
-    $Dialog.Filter = "Csv File (*.csv)|*.csv"
-    if($Dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){
-        if (Test-Path -LiteralPath $Dialog.FileName) {
-            try {
-                Move-Item $Dialog.FileName ("{0}.bak" -f $Dialog.FileName)
-            }
-            catch {
-                [System.Windows.Forms.MessageBox]::Show(
-                    "Failed to create back up of existing file before saving to prevent data loss.  Please try again.",
-                    "Save Device List",
-                    [System.Windows.Forms.MessageBoxButtons]::OK,
-                    [System.Windows.Forms.MessageBoxIcon]::Error
-                )
-                return
-            }
-        }
-        $data | Export-Csv $Dialog.FileName -NoTypeInformation
-    }
-})
-$Menu.SaveAsCsv.Name = 'SaveAsCSV'
-Add-Member -InputObject $Menu.SaveAsCsv -MemberType NoteProperty -Name Component -Value $null
-Add-Member -InputObject $Menu.SaveAsCsv -MemberType NoteProperty -Name View -Value $null
-
-$Menu.SaveAs = New-Object System.Windows.Forms.ToolStripMenuItem("SaveAs", $null, @($Menu.SaveAsCsv))
-$Menu.SaveAs.Name = 'SaveAs'
-
-$Menu.Open = New-Object System.Windows.Forms.ToolStripMenuItem("Open", $null, {
-    param($sender, $e)
-    
-    $Dialog = New-Object System.Windows.Forms.OpenFileDialog
-    
-    <# Fix for dialog script hang bug #>
-    $Dialog.ShowHelp = $false
-        
-    # Dialog Configuration
-    $Dialog.Filter = "DD2875 Csv File (*.csv)|*.csv"
-    $Dialog.Multiselect = $false
-        
-    # Run Selection Dialog
-    if($($Dialog.ShowDialog()) -eq "OK") {
-        Load-Data -Path $Dialog.FileName -View $this.View -Component $this.Component
-    }
-    else{
-        return
-    }
-})
-$Menu.Open.Name = 'Open'
-Add-Member -InputObject $Menu.Open -MemberType NoteProperty -Name Component -Value $null
-Add-Member -InputObject $Menu.Open -MemberType NoteProperty -Name View -Value $null
-
-$Menu.File = New-Object System.Windows.Forms.ToolStripMenuItem("File", $null, @($Menu.SaveAs, $Menu.Open))
-$Menu.File.Name = 'File'
-
-$Menu.Settings = New-Object System.Windows.Forms.ToolStripMenuItem("Settings", $null, {
-    # Currently only launches the settings dialog window, configuration settings are
-    # only used during loading.
-    $Settings = & "$SettingsDialog" $Settings
-})
+#$Menu.SaveAsCsv = New-Object System.Windows.Forms.ToolStripMenuItem("CSV", $null, {
+#    param($sender, $e)
+#
+#    $Dialog = New-Object System.Windows.Forms.SaveFileDialog
+#    $Dialog.ShowHelp = $false
+#
+#    $data = $this.Component.Data
+#    foreach ($record in $data) {
+#        [void]$record.PSObject.Properties.Remove('Dirty')
+#    }
+#
+#    $Dialog.Filter = "Csv File (*.csv)|*.csv"
+#    if($Dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){
+#        if (Test-Path -LiteralPath $Dialog.FileName) {
+#            try {
+#                Move-Item $Dialog.FileName ("{0}.bak" -f $Dialog.FileName)
+#            }
+#            catch {
+#                [System.Windows.Forms.MessageBox]::Show(
+#                    "Failed to create back up of existing file before saving to prevent data loss.  Please try again.",
+#                    "Save Device List",
+#                    [System.Windows.Forms.MessageBoxButtons]::OK,
+#                    [System.Windows.Forms.MessageBoxIcon]::Error
+#                )
+#                return
+#            }
+#        }
+#        $data | Export-Csv $Dialog.FileName -NoTypeInformation
+#    }
+#})
+#$Menu.SaveAsCsv.Name = 'SaveAsCSV'
+#Add-Member -InputObject $Menu.SaveAsCsv -MemberType NoteProperty -Name Component -Value $null
+#Add-Member -InputObject $Menu.SaveAsCsv -MemberType NoteProperty -Name View -Value $null
+#
+#$Menu.SaveAs = New-Object System.Windows.Forms.ToolStripMenuItem("SaveAs", $null, @($Menu.SaveAsCsv))
+#$Menu.SaveAs.Name = 'SaveAs'
+#
+#$Menu.Open = New-Object System.Windows.Forms.ToolStripMenuItem("Open", $null, {
+#    param($sender, $e)
+#    
+#    $Dialog = New-Object System.Windows.Forms.OpenFileDialog
+#    
+#    <# Fix for dialog script hang bug #>
+#    $Dialog.ShowHelp = $false
+#        
+#    # Dialog Configuration
+#    $Dialog.Filter = "DD2875 Csv File (*.csv)|*.csv"
+#    $Dialog.Multiselect = $false
+#        
+#    # Run Selection Dialog
+#    if($($Dialog.ShowDialog()) -eq "OK") {
+#        Load-Data -Path $Dialog.FileName -View $this.View -Component $this.Component
+#    }
+#    else{
+#        return
+#    }
+#})
+#$Menu.Open.Name = 'Open'
+#Add-Member -InputObject $Menu.Open -MemberType NoteProperty -Name Component -Value $null
+#Add-Member -InputObject $Menu.Open -MemberType NoteProperty -Name View -Value $null
+#
+#$Menu.File = New-Object System.Windows.Forms.ToolStripMenuItem("File", $null, @($Menu.SaveAs, $Menu.Open))
+#$Menu.File.Name = 'File'
+#
+#$Menu.Settings = New-Object System.Windows.Forms.ToolStripMenuItem("Settings", $null, {
+#    # Currently only launches the settings dialog window, configuration settings are
+#    # only used during loading.
+#    $Settings = & "$SettingsDialog" $Settings
+#})
 
 # Dynamic Fields Menu
 $Menu.Fields = New-Object System.Windows.Forms.ToolStripMenuItem("Fields")
