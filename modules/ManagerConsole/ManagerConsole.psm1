@@ -11,7 +11,7 @@
 
 Add-Type -AssemblyName System.Windows.Forms
 
-$ModuleInvocationPath  = [System.IO.Path]::GetDirectoryName($MyInvocation.MyCommand.Definition)
+$InvocationPath  = [System.IO.Path]::GetDirectoryName($MyInvocation.MyCommand.Definition)
 
 ###############################################################################
 ###############################################################################
@@ -41,7 +41,6 @@ function Show-ManagerConsole {
 
     $MainForm.Add_Load({
         param($sender, $e)
-        $TabContainer.BringToFront()
 
         foreach ($handler in $OnLoad) {
             $handler.Load()
@@ -58,15 +57,9 @@ function Show-ManagerConsole {
         [void]$MainForm.Controls.Add($Menu)
 
     ###############################################################################
-    # Base Content Tab Control Container Definitions
-    $TabContainer = New-Object System.Windows.Forms.TabControl
-        $TabContainer.Dock = [System.Windows.Forms.DockStyle]::Fill
-    
-        [void]$MainForm.Controls.Add( $TabContainer )
-
-    ###############################################################################
     # Register Components
-    Initialize-Components $MainForm $TabContainer $Menu $OnLoad
+    $Console = Initialize-Components $MainForm $Menu $OnLoad
+        [void]$MainForm.Controls.Add($Console)
 
     ###############################################################################
     # Open Window
@@ -85,12 +78,10 @@ Export-ModuleMember -Function *
 ## explicit call to Export-ModuleMember
 ###############################################################################
 ###############################################################################
-$ACRS = "$env:USERPROFILE\documents\WindowsPowerShell\Programs\ACRS\"
-Import-Module "$ACRS\modules\DataTreeView\DataTreeView.psm1" -Prefix Flow
-Import-Module "$ACRS\modules\DataListView\DataListView.psm1" -Prefix List
-Import-Module "$ACRS\modules\DD2875\dd2875.psm1"
-
-$ImagePath = "$ACRS\resources"
+Import-Module "$Global:AppPath\modules\DataTreeView\DataTreeView.psm1" -Prefix Tree
+Import-Module "$Global:AppPath\modules\DataListView\DataListView.psm1" -Prefix List
+Import-Module "$Global:AppPath\modules\DD2875\dd2875.psm1"
+$ImagePath  = "$Global:AppPath\resources"
 
 ###############################################################################
 # Static Objects and Scriptblocks
@@ -100,44 +91,44 @@ $ImagePath = "$ACRS\resources"
 # Main Menu Definitions
 ###############################################################################
 ### File Menu -------------------------------------------------------------
-$Menu = @{}
-$Menu.Scan = New-Object System.Windows.Forms.ToolStripMenuItem("Scan Documents", $null, {
+$MenuItem = @{}
+$MenuItem.Scan = New-Object System.Windows.Forms.ToolStripMenuItem("Scan Documents", $null, {
     param($sender, $e)
     $this.Enabled = $false
-    Set-ViewData @(Scan-Folder) $this.View $this.Component
+    $this.Layout.View.SetData( @(Scan-Folder), $this.DataStore)
     $this.Enabled = $true
 })
-Add-Member -InputObject $Menu.Scan -MemberType NoteProperty -Name View      -Value $null
-Add-Member -InputObject $Menu.Scan -MemberType NoteProperty -Name Component -Value $null
+Add-Member -InputObject $MenuItem.Scan -MemberType NoteProperty -Name Layout    -Value $null
+Add-Member -InputObject $MenuItem.Scan -MemberType NoteProperty -Name DataStore -Value $null
 
-$Menu.ChangeView = @{}
-$Menu.ChangeView.DropDown = New-Object System.Windows.Forms.ToolStripMenuItem("View")
-Add-Member -InputObject $Menu.ChangeView.DropDown -MemberType NoteProperty -Name View      -Value $null
-Add-Member -InputObject $Menu.ChangeView.DropDown -MemberType NoteProperty -Name Component -Value $null
-Add-Member -InputObject $Menu.ChangeView.DropDown -MemberType NoteProperty -Name Layout    -Value $null
+$MenuItem.ChangeView = @{}
+$MenuItem.ChangeView.DropDown = New-Object System.Windows.Forms.ToolStripMenuItem("View")
+Add-Member -InputObject $MenuItem.ChangeView.DropDown -MemberType NoteProperty -Name DataStore -Value $null
+Add-Member -InputObject $MenuItem.ChangeView.DropDown -MemberType NoteProperty -Name Layout    -Value $null
 
-$Menu.ChangeView.TreeView = New-Object System.Windows.Forms.ToolStripMenuItem("TreeView", $null, {
-
+$MenuItem.ChangeView.TreeView = New-Object System.Windows.Forms.ToolStripMenuItem("TreeView", $null, {
+    Load-View -Container $this.Layout -View TreeView
+    $this.Layout.View.SetData($this.DataStore.ToArray(), $this.DataStore)
 })
-Add-Member -InputObject $Menu.ChangeView.TreeView -MemberType NoteProperty -Name Component -Value $null
-Add-Member -InputObject $Menu.ChangeView.TreeView -MemberType NoteProperty -Name Layout    -Value $null
-[void]$Menu.ChangeView.DropDown.DropDownItems.Add($Menu.ChangeView.TreeView)
+Add-Member -InputObject $MenuItem.ChangeView.TreeView -MemberType NoteProperty -Name DataStore -Value $null
+Add-Member -InputObject $MenuItem.ChangeView.TreeView -MemberType NoteProperty -Name Layout    -Value $null
+[void]$MenuItem.ChangeView.DropDown.DropDownItems.Add($MenuItem.ChangeView.TreeView)
 
-$Menu.ChangeView.ListView = New-Object System.Windows.Forms.ToolStripMenuItem("ListView", $null, {
-
+$MenuItem.ChangeView.ListView = New-Object System.Windows.Forms.ToolStripMenuItem("ListView", $null, {
+    Load-View -Container $this.Layout -View ListView
 })
-Add-Member -InputObject $Menu.ChangeView.ListView -MemberType NoteProperty -Name Component -Value $null
-Add-Member -InputObject $Menu.ChangeView.ListView -MemberType NoteProperty -Name Layout    -Value $null
-[void]$Menu.ChangeView.DropDown.DropDownItems.Add($Menu.ChangeView.ListView)
+Add-Member -InputObject $MenuItem.ChangeView.ListView -MemberType NoteProperty -Name DataStore -Value $null
+Add-Member -InputObject $MenuItem.ChangeView.ListView -MemberType NoteProperty -Name Layout    -Value $null
+[void]$MenuItem.ChangeView.DropDown.DropDownItems.Add($MenuItem.ChangeView.ListView)
 
-$Menu.SaveAsCsv = New-Object System.Windows.Forms.ToolStripMenuItem("CSV", $null, 
+$MenuItem.SaveAsCsv = New-Object System.Windows.Forms.ToolStripMenuItem("CSV", $null, 
     [System.EventHandler]{
     param($sender, $e)
 
     $Dialog = New-Object System.Windows.Forms.SaveFileDialog
     $Dialog.ShowHelp = $false
 
-    $data = $this.Component.Data
+    $data = $this.DataStore
     foreach ($record in $data) {
         [void]$record.PSObject.Properties.Remove('Dirty')
     }
@@ -158,23 +149,23 @@ $Menu.SaveAsCsv = New-Object System.Windows.Forms.ToolStripMenuItem("CSV", $null
                 return
             }
         }
-        $data | Export-Csv $Dialog.FileName -NoTypeInformation
+        $DataStore | Export-Csv $Dialog.FileName -NoTypeInformation
     }
 })
-$Menu.SaveAsCsv.Name = 'SaveAsCSV'
-Add-Member -InputObject $Menu.SaveAsCsv -MemberType NoteProperty -Name Component -Value $null
-Add-Member -InputObject $Menu.SaveAsCsv -MemberType NoteProperty -Name View      -Value $null
+$MenuItem.SaveAsCsv.Name = 'SaveAsCSV'
+Add-Member -InputObject $MenuItem.SaveAsCsv -MemberType NoteProperty -Name DataStore -Value $null
+Add-Member -InputObject $MenuItem.SaveAsCsv -MemberType NoteProperty -Name View      -Value $null
 
-$Menu.SaveAs = New-Object System.Windows.Forms.ToolStripMenuItem("SaveAs", $null, @($Menu.SaveAsCsv))
-$Menu.SaveAs.Name = 'SaveAs'
+$MenuItem.SaveAs = New-Object System.Windows.Forms.ToolStripMenuItem("SaveAs", $null, @($MenuItem.SaveAsCsv))
+$MenuItem.SaveAs.Name = 'SaveAs'
 
-$Menu.Open = New-Object System.Windows.Forms.ToolStripMenuItem("Open", $null, 
+$MenuItem.Open = New-Object System.Windows.Forms.ToolStripMenuItem("Open", $null, 
     [System.EventHandler]{
     param($sender, $e)
     
     $Dialog = New-Object System.Windows.Forms.OpenFileDialog
     
-    <# Fix for dialog script hang bug #>
+    <# Fix for dialog script hang bug #> 
     $Dialog.ShowHelp = $false
         
     # Dialog Configuration
@@ -183,20 +174,20 @@ $Menu.Open = New-Object System.Windows.Forms.ToolStripMenuItem("Open", $null,
         
     # Run Selection Dialog
     if($($Dialog.ShowDialog()) -eq "OK") {
-        Load-Data -Path $Dialog.FileName -View $this.View -Component $this.Component
+        $this.Layout.View.LoadData($Dialog.FileName, $this.DataStore)
     }
     else{
         return
     }
 })
-$Menu.Open.Name = 'Open'
-Add-Member -InputObject $Menu.Open -MemberType NoteProperty -Name Component -Value $null
-Add-Member -InputObject $Menu.Open -MemberType NoteProperty -Name View      -Value $null
+$MenuItem.Open.Name = 'Open'
+Add-Member -InputObject $MenuItem.Open -MemberType NoteProperty -Name DataStore -Value $null
+Add-Member -InputObject $MenuItem.Open -MemberType NoteProperty -Name Layout    -Value $null
 
-$Menu.File = New-Object System.Windows.Forms.ToolStripMenuItem("File", $null, @($Menu.SaveAs, $Menu.Open))
-$Menu.File.Name = 'File'
+$MenuItem.File = New-Object System.Windows.Forms.ToolStripMenuItem("File", $null, @($MenuItem.SaveAs, $MenuItem.Open))
+$MenuItem.File.Name = 'File'
 
-$Menu.Settings = New-Object System.Windows.Forms.ToolStripMenuItem("Settings", $null, {
+$MenuItem.Settings = New-Object System.Windows.Forms.ToolStripMenuItem("Settings", $null, {
     # Currently only launches the settings dialog window, configuration settings are
     # only used during loading.
     $Settings = & "$SettingsDialog" $Settings
@@ -211,9 +202,6 @@ function Initialize-Components {
             [System.Windows.Forms.Form]$Window,
 
         [Parameter(Mandatory = $true)]
-            [System.Windows.Forms.TabControl]$Parent,
-
-        [Parameter(Mandatory = $true)]
             [System.Windows.Forms.MenuStrip]$MenuStrip,
 
         [Parameter(Mandatory = $true)]
@@ -221,35 +209,39 @@ function Initialize-Components {
             [System.Collections.ArrayList]$OnLoad
     )
 
-    $Container, $Layout, $ComponentMenuStrip = New-Component
-    Add-Member -InputObject $Container -Type NoteProperty -Name ComponentMenuStrip -Value $ComponentMenuStrip
-    Add-Member -InputObject $Container -Type NoteProperty -Name Window             -Value $Window
-    Add-Member -InputObject $Container -Type NoteProperty -Name OnLoad             -Value $OnLoad
+    $Container = New-Component
+    $Container.Window = $Window
+    $Container.OnLoad = $OnLoad
 
-    [void]$Parent.TabPages.Add($Container)
-    [void]$MenuStrip.Items.Add($Menu.Scan)
+    [void]$MenuStrip.Items.Add($MenuItem.File)
+    [void]$MenuStrip.Items.Add($MenuItem.Scan)
+    [void]$MenuStrip.Items.Add($MenuItem.ChangeView.DropDown)
+    [void]$MenuStrip.Items.Add($MenuItem.Settings)
 
-    $Menu.Scan.Component = $Container
 
-    $Menu.ChangeView.DropDown.Component = $Container
-    $Menu.ChangeView.DropDown.Layout    = $Layout
-    $Menu.ChangeView.TreeView.Component = $Container
-    $Menu.ChangeView.TreeView.Layout    = $Layout
-    $Menu.ChangeView.ListView.Component = $Container
-    $Menu.ChangeView.ListView.Layout    = $Layout
+    $MenuItem.Scan.DataStore = $Container.DataStore
+    $MenuItem.Scan.Layout    = $Container
+    $MenuItem.Open.DataStore = $Container.DataStore
+    $MenuItem.Open.Layout    = $Container
+    $MenuItem.ChangeView.DropDown.DataStore = $Container.DataStore
+    $MenuItem.ChangeView.DropDown.Layout    = $Container
+    $MenuItem.ChangeView.TreeView.DataStore = $Container.DataStore
+    $MenuItem.ChangeView.TreeView.Layout    = $Container
+    $MenuItem.ChangeView.ListView.DataStore = $Container.DataStore
+    $MenuItem.ChangeView.ListView.Layout    = $Container
 
-    Load-View -Container $Container -Layout $Layout
+    Load-View -Container $Container -View TreeView
+    
+    $MenuItem.ChangeView.DropDown.Layout = $Container
+
+    return $Container
 }
 
 function Load-View {
     param(
         [Parameter(Mandatory = $true)]
-        [System.Windows.Forms.Control]
-            $Container,
-
-        [Parameter(Mandatory = $true)]
         [System.Windows.Forms.TableLayoutPanel]
-            $Layout,
+            $Container,
 
         [Parameter(Mandatory = $false)]
         [ValidateSet('ListView','TreeView')]
@@ -257,39 +249,85 @@ function Load-View {
             $View = 'ListView'
     )
     
+    if ($Container.View) {
+        $Container.Controls.Remove( ($Container.GetControlFromPosition(0,1)) )
+    }
+
     switch ($View) {
         ListView {
             $ViewControl = Initialize-ListComponents -Window $Container.Window -Parent $Container -MenuStrip $Container.ComponentMenuStrip -OnLoad $Container.OnLoad
         }
         TreeView {
-            $ViewControl = Initialize-FlowComponents -Window $Container.Window -Parent $Container -MenuStrip $Container.ComponentMenuStrip -OnLoad $Container.OnLoad
+            $ViewControl = Initialize-TreeComponents -Window $Container.Window -Parent $Container -MenuStrip $Container.ComponentMenuStrip -OnLoad $Container.OnLoad
         }
     }
     
-    $Menu.Scan.View = $ViewControl
-    $Menu.ChangeView.DropDown.View = $ViewControl
+    $replaced = $Container.View
+    $Container.View = $ViewControl
 
-    [Void]$Layout.Controls.Add($ViewControl, 0, 1)
+    [Void]$Container.Controls.Add($ViewControl, 0, 1)
+
+    if ($replaced) {
+        $replaced.Dispose()
+    }
 }
 
 ###############################################################################
 # WinForm Constructor
 ###############################################################################
 function New-Component() {
-    # Container Definitions -------------------------------------------------------
-    $Component = New-Object System.Windows.Forms.TabPage
-        $Component.Dock = [System.Windows.Forms.DockStyle]::Fill
-        $Component.Text = "Account Requests"
-
-        # Attached to Parent Control by Module Component Registration Function
-
-        # Data Source Reference for Component
-        Add-Member -InputObject $Component -MemberType NoteProperty -Name Data -Value (New-Object System.Collections.ArrayList)
-
     $Layout = New-Object System.Windows.Forms.TableLayoutPanel
         $Layout.Dock = [System.Windows.Forms.DockStyle]::Fill
         $Layout.AutoSize = $true
         $Layout.RowCount = 2
+
+        # Reference to ArrayList (Must be directly accessable!)
+        Add-Member -InputObject $Layout -MemberType NoteProperty -Name OnLoad    -Value $null
+        Add-Member -InputObject $Layout -MemberType NoteProperty -Name DataStore -Value (New-Object System.Collections.ArrayList)
+        
+        ## Private Storage ------------------------------------------------------------
+        # Data Source Reference for Component
+        Add-Member -InputObject $Layout -MemberType NoteProperty -Name __ComponentMenuStrip -Value $null
+        Add-Member -InputObject $Layout -MemberType NoteProperty -Name __Window             -Value $null
+        Add-Member -InputObject $Layout -MemberType NoteProperty -Name __View               -Value $null
+
+        # Accessors
+        Add-Member -InputObject $Layout -Type ScriptProperty -Name ComponentMenuStrip -Value {
+            # Get Property
+            return $this.__ComponentMenuStrip
+            }{
+            # Set Property
+            param(
+                [Parameter(Mandatory = $true)]
+                [System.Windows.Forms.MenuStrip]
+                    $InputObject
+                )
+            $this.__ComponentMenuStrip = $InputObject
+        }
+        Add-Member -InputObject $Layout -Type ScriptProperty -Name Window -Value {
+            # Get Property
+            return $this.__Window
+            }{
+            # Set Property
+            param(
+                [Parameter(Mandatory = $true)]
+                [System.Windows.Forms.Form]
+                    $InputObject
+                )
+            $this.__Window = $InputObject
+        }
+        Add-Member -InputObject $Layout -Type ScriptProperty -Name View -Value {
+            # Get Property
+            return $this.__View
+            }{
+            # Set Property
+            param(
+                [Parameter(Mandatory = $true)]
+                [System.Windows.Forms.Control]
+                    $InputObject
+                )
+            $this.__View = $InputObject
+        }
 
     # ToolStrip Section
     [Void]$Layout.RowStyles.Add( (New-Object System.Windows.Forms.RowStyle) )
@@ -301,11 +339,10 @@ function New-Component() {
         $Layout.RowStyles[1].SizeType = [System.Windows.Forms.SizeType]::Percent
         $Layout.RowStyles[1].Height = 100
 
-    [Void]$Component.Controls.Add($Layout)
-
     $DeviceMenu = New-Object System.Windows.Forms.MenuStrip
     $DeviceMenu.Dock = [System.Windows.Forms.DockStyle]::Fill
         [Void]$Layout.Controls.Add($DeviceMenu, 0, 0)
+        $Layout.ComponentMenuStrip = $DeviceMenu
 
-    return $Component, $Layout, $DeviceMenu
+    return $Layout
 }

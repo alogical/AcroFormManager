@@ -9,7 +9,6 @@
     Author: Daniel K. Ives
     Email:  daniel.ives@live.com
 #>
-
 param(
     $settings = $null
 )
@@ -18,8 +17,11 @@ Add-Type -AssemblyName System.Windows.Forms
 
 $InvocationPath  = [System.IO.Path]::GetDirectoryName($MyInvocation.MyCommand.Definition)
 
-## SECTION 1 : VALIDATION ##
-
+###############################################################################
+###############################################################################
+## SECTION 1 : VALIDATION
+###############################################################################
+###############################################################################
 # Settings File #
 $settingsPath = Join-Path $InvocationPath 'settings.json'
 
@@ -37,7 +39,7 @@ if (!$settings) {
         $settings.version = "1.0.0"
 
         # Local Database Location
-        $settings.localdb = "$InvocationPath\..\..\database\devicedb"
+        $settings.localdb = "$Global:AppPath\database\devicedb"
 
     # Configurable Settings #
     
@@ -51,7 +53,11 @@ if (!$settings) {
             $settings.treeview.groups = New-Object System.Collections.ArrayList
 }
 
-## SECTION 2 : FORM DEFINITION ##
+###############################################################################
+###############################################################################
+## SECTION 2 : FORM DEFINITION
+###############################################################################
+###############################################################################
 $form = New-Object System.Windows.Forms.Form
     $form.Width = 600
     $form.Height = 300
@@ -134,7 +140,11 @@ $sRemoteDatabasePath = & {
 
     [void]$form.Controls.Add($sRemoteDatabasePath)
 
-## SECTION 3 : GET/SAVE SETTINGS ##
+###############################################################################
+###############################################################################
+## SECTION 3 : GET/SAVE SETTINGS
+###############################################################################
+###############################################################################
 
 [void]$form.ShowDialog()
       $form.Dispose()
