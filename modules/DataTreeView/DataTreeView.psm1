@@ -137,7 +137,8 @@ function Set-Data {
             ($Data[0] |
                 Get-Member -MemberType NoteProperty |
                     Select-Object -Property Name -Unique |
-                        % {Write-Output $_.Name})
+                        Where-Object {$_.Name -ne 'Dirty'} |
+                            % {Write-Output $_.Name})
         )
 
         $View.Display.Fields.Clear()
@@ -217,6 +218,7 @@ $MethodSetData = {
             $Data,
 
         [Parameter(Mandatory = $true)]
+            [AllowEmptyCollection()]
             [System.Collections.ArrayList]
             $DataStore
     )

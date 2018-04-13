@@ -103,22 +103,33 @@ Add-Member -InputObject $MenuItem.Scan -MemberType NoteProperty -Name DataStore 
 
 $MenuItem.ChangeView = @{}
 $MenuItem.ChangeView.DropDown = New-Object System.Windows.Forms.ToolStripMenuItem("View")
-Add-Member -InputObject $MenuItem.ChangeView.DropDown -MemberType NoteProperty -Name DataStore -Value $null
-Add-Member -InputObject $MenuItem.ChangeView.DropDown -MemberType NoteProperty -Name Layout    -Value $null
 
 $MenuItem.ChangeView.TreeView = New-Object System.Windows.Forms.ToolStripMenuItem("TreeView", $null, {
+    if ($this.Displayed) {
+        return
+    }
     Load-View -Container $this.Layout -View TreeView
-    $this.Layout.View.SetData($this.DataStore.ToArray(), $this.DataStore)
+    if ($this.DataStore.Count -gt 0) {
+        $this.Layout.View.SetData($this.DataStore.ToArray(), $this.DataStore)
+    }
 })
 Add-Member -InputObject $MenuItem.ChangeView.TreeView -MemberType NoteProperty -Name DataStore -Value $null
 Add-Member -InputObject $MenuItem.ChangeView.TreeView -MemberType NoteProperty -Name Layout    -Value $null
+Add-Member -InputObject $MenuItem.ChangeView.TreeView -MemberType NoteProperty -Name Displayed  -Value $false
 [void]$MenuItem.ChangeView.DropDown.DropDownItems.Add($MenuItem.ChangeView.TreeView)
 
 $MenuItem.ChangeView.ListView = New-Object System.Windows.Forms.ToolStripMenuItem("ListView", $null, {
+    if ($this.Displayed) {
+        return
+    }
     Load-View -Container $this.Layout -View ListView
+    if ($this.DataStore.Count -gt 0) {
+        $this.Layout.View.SetData($this.DataStore.ToArray(), $this.DataStore)
+    }
 })
 Add-Member -InputObject $MenuItem.ChangeView.ListView -MemberType NoteProperty -Name DataStore -Value $null
 Add-Member -InputObject $MenuItem.ChangeView.ListView -MemberType NoteProperty -Name Layout    -Value $null
+Add-Member -InputObject $MenuItem.ChangeView.ListView -MemberType NoteProperty -Name Displayed -Value $false
 [void]$MenuItem.ChangeView.DropDown.DropDownItems.Add($MenuItem.ChangeView.ListView)
 
 $MenuItem.SaveAsCsv = New-Object System.Windows.Forms.ToolStripMenuItem("CSV", $null, 
@@ -223,8 +234,6 @@ function Initialize-Components {
     $MenuItem.Scan.Layout    = $Container
     $MenuItem.Open.DataStore = $Container.DataStore
     $MenuItem.Open.Layout    = $Container
-    $MenuItem.ChangeView.DropDown.DataStore = $Container.DataStore
-    $MenuItem.ChangeView.DropDown.Layout    = $Container
     $MenuItem.ChangeView.TreeView.DataStore = $Container.DataStore
     $MenuItem.ChangeView.TreeView.Layout    = $Container
     $MenuItem.ChangeView.ListView.DataStore = $Container.DataStore
@@ -232,8 +241,6 @@ function Initialize-Components {
 
     Load-View -Container $Container -View TreeView
     
-    $MenuItem.ChangeView.DropDown.Layout = $Container
-
     return $Container
 }
 
@@ -250,19 +257,23 @@ function Load-View {
     )
     
     if ($Container.View) {
-        $Container.Controls.Remove( ($Container.GetControlFromPosition(0,1)) )
+        [void]$Container.Controls.Remove( ($Container.GetControlFromPosition(0,1)) )
     }
 
     switch ($View) {
         ListView {
             $ViewControl = Initialize-ListComponents -Window $Container.Window -Parent $Container -MenuStrip $Container.ComponentMenuStrip -OnLoad $Container.OnLoad
+            $MenuItem.ChangeView.ListView.Displayed = $true
+            $MenuItem.ChangeView.TreeView.Displayed = $false
         }
         TreeView {
             $ViewControl = Initialize-TreeComponents -Window $Container.Window -Parent $Container -MenuStrip $Container.ComponentMenuStrip -OnLoad $Container.OnLoad
+            $MenuItem.ChangeView.ListView.Displayed = $false
+            $MenuItem.ChangeView.TreeView.Displayed = $true
         }
     }
     
-    $replaced = $Container.View
+    $replaced       = $Container.View
     $Container.View = $ViewControl
 
     [Void]$Container.Controls.Add($ViewControl, 0, 1)
