@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Display control.
+    Data field flow layout display control.
 
 .DESCRIPTION
 
@@ -11,7 +11,7 @@
 
 Add-Type -AssemblyName System.Windows.Forms
 
-$ModuleInvocationPath  = [System.IO.Path]::GetDirectoryName($MyInvocation.MyCommand.Definition)
+$InvocationPath  = [System.IO.Path]::GetDirectoryName($MyInvocation.MyCommand.Definition)
 
 ###############################################################################
 ###############################################################################
@@ -40,17 +40,7 @@ function Initialize-Components {
     )
 
     # Initialize
-    $View = New-ViewControl -Window $Window -Container $Parent -OnLoad $OnLoad
-
-    # Menu Configuration
-    $Menu.SaveAsCsv.Component = $Parent
-    $Menu.SaveAsCsv.View      = $View
-    $Menu.Open.Component      = $Parent
-    $Menu.Open.View           = $View
-
-    [Void]$MenuStrip.Items.Add($Menu.File)
-    [Void]$MenuStrip.Items.Add($Menu.Fields)
-    [Void]$MenuStrip.Items.Add($Menu.Settings)
+    $View = New-ViewControl -Window $Window -DataStore $Parent.DataStore -OnLoad $OnLoad
 
     $Loader = [PSCustomObject]@{
         Settings = $Settings
@@ -73,7 +63,8 @@ function Initialize-Components {
 }
 
 ###############################################################################
-# Device Data Management
+# Device Data Management Handlers
+###############################################################################
 function Load-Data {
     param(
         [Parameter(Mandatory = $true)]
@@ -85,8 +76,9 @@ function Load-Data {
             $View,
 
         [Parameter(Mandatory = $true)]
-            [System.Windows.Forms.Control]
-            $Component
+        [AllowEmptyCollection()]
+            [System.Collections.ArrayList]
+            $DataStore
     )
 
     $Data = Import-Csv $Path
@@ -99,12 +91,27 @@ function Load-Data {
         $View.Tree.Display.Nodes.Clear()
     }
 
-    Set-Data $Data $View $Component
+    Set-Data $Data $View $DataStore
+}
+
+$MethodLoadData = {
+    param(
+        [Parameter(Mandatory = $true)]
+            [String]
+            $Path,
+
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+            [System.Collections.ArrayList]
+            $DataStore
+    )
+
+    Load-Data -Path $Path -View $this -DataStore $DataStore
 }
 
 function Set-Data {
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
             $Data,
 
         [Parameter(Mandatory = $true)]
@@ -112,9 +119,14 @@ function Set-Data {
             $View,
 
         [Parameter(Mandatory = $true)]
-            [System.Windows.Forms.Control]
-            $Component
+        [AllowEmptyCollection()]
+            [System.Collections.ArrayList]
+            $DataStore
     )
+
+    if ($Data.Count -eq 0) {
+        return
+    }
 
     if ($Data.Count -gt 0) {
         Write-Debug "Processing $($Data.Count) items:
@@ -125,7 +137,8 @@ function Set-Data {
             ($Data[0] |
                 Get-Member -MemberType NoteProperty |
                     Select-Object -Property Name -Unique |
-                        % {Write-Output $_.Name})
+                        Where-Object {$_.Name -ne 'Dirty'} |
+                            % {Write-Output $_.Name})
         )
 
         $View.Display.Fields.Clear()
@@ -177,15 +190,14 @@ function Set-Data {
             [Void]$toggle.Items.Add($item)
         }
         
-
         # Add state fields
         foreach ($record in $data) {
             Add-Member -InputObject $record -MemberType NoteProperty -Name Dirty -Value $false
         }
 
         # Saved reference to the data for later export
-        [Void]$Component.Data.Clear()
-        [Void]$Component.Data.AddRange($Data)
+        [Void]$DataStore.Clear()
+        [Void]$DataStore.AddRange($Data)
 
         # Set TreeView Object Data Source Fields
         $View.Tree.SettingsTab.RegisterFields($FieldNames)
@@ -200,6 +212,20 @@ function Set-Data {
     }
 }
 
+$MethodSetData = {
+    param(
+        [Parameter(Mandatory = $true)]
+            $Data,
+
+        [Parameter(Mandatory = $true)]
+            [AllowEmptyCollection()]
+            [System.Collections.ArrayList]
+            $DataStore
+    )
+
+    Set-Data -Data $Data -View $this -DataStore $DataStore
+}
+
 Export-ModuleMember -Function *
 
 ###############################################################################
@@ -210,15 +236,13 @@ Export-ModuleMember -Function *
 ## explicit call to Export-ModuleMember
 ###############################################################################
 ###############################################################################
-Import-Module "$ModuleInvocationPath\..\SortedTreeView\SortedTreeView.psm1" -Prefix Tree
-
-$ImagePath = "$ModuleInvocationPath\..\..\resources"
-$BinPath   = "$ModuleInvocationPath\..\..\bin"
+Import-Module "$Global:AppPath\modules\TreeViewExtended\TreeViewExtended.psm1" -Prefix Tree
+$ImagePath  = "$Global:AppPath\resources"
 
 ### Settings Management -------------------------------------------------------
 $Settings = $null
-$SettingsPath = "$ModuleInvocationPath\settings.json"
-$SettingsDialog = "$ModuleInvocationPath\settings.ps1"
+$SettingsPath   = "$InvocationPath\settings.json"
+$SettingsDialog = "$InvocationPath\settings.ps1"
 
 ###############################################################################
 ## Load Settings
@@ -230,75 +254,6 @@ if (Test-Path -LiteralPath $SettingsPath -PathType Leaf) {
 # Main Menu Definitions
 ### File Menu -------------------------------------------------------------
 $Menu = @{}
-$Menu.SaveAsCsv = New-Object System.Windows.Forms.ToolStripMenuItem("CSV", $null, {
-    param($sender, $e)
-
-    $Dialog = New-Object System.Windows.Forms.SaveFileDialog
-    $Dialog.ShowHelp = $false
-
-    $data = $this.Component.Data
-    foreach ($record in $data) {
-        [void]$record.PSObject.Properties.Remove('Dirty')
-    }
-
-    $Dialog.Filter = "Csv File (*.csv)|*.csv"
-    if($Dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){
-        if (Test-Path -LiteralPath $Dialog.FileName) {
-            try {
-                Move-Item $Dialog.FileName ("{0}.bak" -f $Dialog.FileName)
-            }
-            catch {
-                [System.Windows.Forms.MessageBox]::Show(
-                    "Failed to create back up of existing file before saving to prevent data loss.  Please try again.",
-                    "Save Device List",
-                    [System.Windows.Forms.MessageBoxButtons]::OK,
-                    [System.Windows.Forms.MessageBoxIcon]::Error
-                )
-                return
-            }
-        }
-        $data | Export-Csv $Dialog.FileName -NoTypeInformation
-    }
-})
-$Menu.SaveAsCsv.Name = 'SaveAsCSV'
-Add-Member -InputObject $Menu.SaveAsCsv -MemberType NoteProperty -Name Component -Value $null
-Add-Member -InputObject $Menu.SaveAsCsv -MemberType NoteProperty -Name View -Value $null
-
-$Menu.SaveAs = New-Object System.Windows.Forms.ToolStripMenuItem("SaveAs", $null, @($Menu.SaveAsCsv))
-$Menu.SaveAs.Name = 'SaveAs'
-
-$Menu.Open = New-Object System.Windows.Forms.ToolStripMenuItem("Open", $null, {
-    param($sender, $e)
-    
-    $Dialog = New-Object System.Windows.Forms.OpenFileDialog
-    
-    <# Fix for dialog script hang bug #>
-    $Dialog.ShowHelp = $false
-        
-    # Dialog Configuration
-    $Dialog.Filter = "DD2875 Csv File (*.csv)|*.csv"
-    $Dialog.Multiselect = $false
-        
-    # Run Selection Dialog
-    if($($Dialog.ShowDialog()) -eq "OK") {
-        Load-Data -Path $Dialog.FileName -View $this.View -Component $this.Component
-    }
-    else{
-        return
-    }
-})
-$Menu.Open.Name = 'Open'
-Add-Member -InputObject $Menu.Open -MemberType NoteProperty -Name Component -Value $null
-Add-Member -InputObject $Menu.Open -MemberType NoteProperty -Name View -Value $null
-
-$Menu.File = New-Object System.Windows.Forms.ToolStripMenuItem("File", $null, @($Menu.SaveAs, $Menu.Open))
-$Menu.File.Name = 'File'
-
-$Menu.Settings = New-Object System.Windows.Forms.ToolStripMenuItem("Settings", $null, {
-    # Currently only launches the settings dialog window, configuration settings are
-    # only used during loading.
-    $Settings = & "$SettingsDialog" $Settings
-})
 
 # Dynamic Fields Menu
 $Menu.Fields = New-Object System.Windows.Forms.ToolStripMenuItem("Fields")
@@ -320,7 +275,8 @@ function New-ViewControl {
             [System.Windows.Forms.Form]$Window,
 
         [Parameter(Mandatory = $true)]
-            [System.Windows.Forms.Control]$Container,
+            [AllowEmptyCollection()]
+            [System.Collections.ArrayList]$DataStore,
 
         [Parameter(Mandatory = $true)]
             [AllowEmptyCollection()]
@@ -334,16 +290,18 @@ function New-ViewControl {
 
         # Attached to Parent Control by Module Component Registration Function
         Add-Member -InputObject $View -MemberType NoteProperty -Name FieldList -Value (New-Object System.Collections.ArrayList)
+        Add-Member -InputObject $View -MemberType ScriptMethod -Name LoadData -Value $MethodLoadData
+        Add-Member -InputObject $View -MemberType ScriptMethod -Name SetData -Value $MethodSetData
         
 
     # Device Navigation Panel
         # SortedTreeView component created by intialize function (dependecy on runtime object references)
     $TreeView = Initialize-TreeComponents `
         -Window          $Window              `
-        -Parent          $View.Panel1    `
+        -Parent          $View.Panel1         `
         -MenuStrip       $null                `
         -OnLoad          $OnLoad              `
-        -Source          $Container.Data      `
+        -Source          $DataStore           `
         -ImageList       $ImageList           `
         -TreeDefinition  $TreeViewDefinition  `
         -GroupDefinition $GroupNodeDefinition `

@@ -219,6 +219,7 @@ function TreeView-OnClick {
 
 function TreeView-AfterSelect ($sender, $e) {
     $node = $sender.SelectedNode
+
     # Toggle viewer highlighted fields
     if ($node.Tag.Type -eq 'Field') {
         $node.ToggleHighlight()

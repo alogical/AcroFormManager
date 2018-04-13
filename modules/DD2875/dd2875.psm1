@@ -97,7 +97,6 @@ function Dialog-OpenForm {
 function Scan-Folder ($path) {
     $dialog  = New-Object System.Windows.Forms.FolderBrowserDialog
     $dialog.Description  = "Select Directory..."
-    $dialog.SelectedPath = $erm
 
     if ([String]::IsNullOrEmpty($path)) {
         if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
@@ -177,9 +176,7 @@ $graphics = & {
     return $g
 }
 
-# Default Paths
-$erm = "\\52tyfr-fs-001v.area52.afnoapps.usaf.mil\ERM\21 - (PA) Forms used to Formally Record Authorization for Access to Special Program Material\2- DD 2875\691 COS"
-
+# FORM PRODUCER TYPES
 $AcroDistiller8 = "Acrobat Distiller 8.1.0"
 $AcroDesigner9  = "Adobe LiveCycle Designer ES 9.0"
 
